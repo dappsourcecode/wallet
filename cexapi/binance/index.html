@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Binance Portfolio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center font-mono">
+
+    <div class="w-full max-w-lg bg-gray-800 p-8 rounded-lg shadow-2xl border border-gray-700">
+        <h1 class="text-3xl font-bold mb-6 text-yellow-500">Binance Tracker</h1>
+
+        <div class="space-y-4">
+            <div>
+                <label class="text-xs uppercase text-gray-500">API Key</label>
+                <input type="text" id="apiKey" class="w-full bg-gray-700 border border-gray-600 rounded p-3 focus:outline-none focus:border-yellow-500">
+            </div>
+            <div>
+                <label class="text-xs uppercase text-gray-500">API Secret</label>
+                <input type="password" id="apiSecret" class="w-full bg-gray-700 border border-gray-600 rounded p-3 focus:outline-none focus:border-yellow-500">
+            </div>
+            
+            <button onclick="fetchBinance()" class="w-full bg-yellow-600 hover:bg-yellow-700 text-gray-900 font-bold py-3 rounded transition">
+                Check Balance
+            </button>
+        </div>
+
+        <div id="output" class="mt-6 bg-black p-4 rounded h-48 overflow-auto text-xs whitespace-pre-wrap text-yellow-400 font-mono border border-gray-700 hidden"></div>
+    </div>
+
+    <script>
+        async function fetchBinance() {
+            const key = document.getElementById('apiKey').value.trim();
+            const secret = document.getElementById('apiSecret').value.trim();
+            const output = document.getElementById('output');
+            
+            output.classList.remove('hidden');
+            output.innerText = "Fetching...";
+
+            if(!key || !secret) {
+                output.innerText = "Error: Key and Secret are required.";
+                return;
+            }
+
+            try {
+                const baseUrl = "https://api.binance.com";
+                const endpoint = "/api/v3/account";
+                const timestamp = Date.now().toString();
+                
+                const queryString = `timestamp=${timestamp}`;
+                const signature = CryptoJS.HmacSHA256(queryString, secret).toString(CryptoJS.enc.Hex);
+                
+                const fullUrl = `${baseUrl}${endpoint}?${queryString}&signature=${signature}`;
+
+                const headers = { "X-MBX-APIKEY": key };
+
+                const response = await fetch(fullUrl, { method: "GET", headers: headers });
+                
+                if (!response.ok) {
+                    const err = await response.text();
+                    output.innerText = `Error ${response.status}: ${err}`;
+                    return;
+                }
+
+                const json = await response.json();
+                const balances = json.balances.filter(b => parseFloat(b.free) > 0 || parseFloat(b.locked) > 0);
+
+                if(balances.length === 0) {
+                    output.innerText = "Success: No active balances found.";
+                } else {
+                    let txt = "ASSET      | FREE       | LOCKED\n-----------|------------|----------\n";
+                    balances.forEach(b => {
+                        txt += `${b.asset.padEnd(10)} | ${parseFloat(b.free).toFixed(4).padEnd(10)} | ${parseFloat(b.locked).toFixed(4)}\n`;
+                    });
+                    output.innerText = txt;
+                }
+            } catch (e) {
+                output.innerText = `Fetch Error: ${e.message}\n(Did you enable the CORS extension?)`;
+            }
+        }
+    </script>
+</body>
+</html>

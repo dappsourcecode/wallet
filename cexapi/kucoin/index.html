@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KuCoin Portfolio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen flex items-center justify-center font-mono">
+
+    <div class="w-full max-w-lg bg-gray-800 p-8 rounded-lg shadow-2xl border border-gray-700">
+        <h1 class="text-3xl font-bold mb-6 text-green-500">KuCoin Tracker</h1>
+
+        <div class="space-y-4">
+            <div>
+                <label class="text-xs uppercase text-gray-500">API Key</label>
+                <input type="text" id="apiKey" class="w-full bg-gray-700 border border-gray-600 rounded p-3 focus:outline-none focus:border-green-500">
+            </div>
+            <div>
+                <label class="text-xs uppercase text-gray-500">API Secret</label>
+                <input type="password" id="apiSecret" class="w-full bg-gray-700 border border-gray-600 rounded p-3 focus:outline-none focus:border-green-500">
+            </div>
+            <div>
+                <label class="text-xs uppercase text-gray-500">Passphrase</label>
+                <input type="password" id="apiPassphrase" class="w-full bg-gray-700 border border-gray-600 rounded p-3 focus:outline-none focus:border-green-500">
+            </div>
+            
+            <button onclick="fetchKucoin()" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded transition">
+                Check Balance
+            </button>
+        </div>
+
+        <div id="output" class="mt-6 bg-black p-4 rounded h-48 overflow-auto text-xs whitespace-pre-wrap text-green-400 font-mono border border-gray-700 hidden"></div>
+    </div>
+
+    <script>
+        async function fetchKucoin() {
+            const key = document.getElementById('apiKey').value.trim();
+            const secret = document.getElementById('apiSecret').value.trim();
+            const passphrase = document.getElementById('apiPassphrase').value.trim();
+            const output = document.getElementById('output');
+            
+            output.classList.remove('hidden');
+            output.innerText = "Fetching...";
+
+            if(!key || !secret || !passphrase) {
+                output.innerText = "Error: All fields are required.";
+                return;
+            }
+
+            try {
+                const baseUrl = "https://api.kucoin.com";
+                const endpoint = "/api/v1/accounts";
+                const timestamp = Date.now().toString();
+                
+                // 1. Sign Passphrase (V2 Requirement)
+                const passphraseSign = CryptoJS.HmacSHA256(passphrase, secret).toString(CryptoJS.enc.Base64);
+
+                // 2. Sign Request
+                const strToSign = timestamp + "GET" + endpoint;
+                const signature = CryptoJS.HmacSHA256(strToSign, secret).toString(CryptoJS.enc.Base64);
+
+                const headers = {
+                    "KC-API-KEY": key,
+                    "KC-API-SIGN": signature,
+                    "KC-API-TIMESTAMP": timestamp,
+                    "KC-API-PASSPHRASE": passphraseSign,
+                    "KC-API-KEY-VERSION": "2",
+                    "Content-Type": "application/json"
+                };
+
+                const response = await fetch(baseUrl + endpoint, { method: "GET", headers: headers });
+                const json = await response.json();
+
+                if (json.code !== "200000") {
+                    output.innerText = `Error: ${json.msg}`;
+                } else {
+                    const balances = json.data.filter(b => parseFloat(b.balance) > 0);
+                    if(balances.length === 0) {
+                        output.innerText = "Success: No active balances found.";
+                    } else {
+                        let txt = "COIN       | TYPE   | BALANCE\n-----------|--------|----------\n";
+                        balances.forEach(b => {
+                            txt += `${b.currency.padEnd(10)} | ${b.type.padEnd(6)} | ${b.balance}\n`;
+                        });
+                        output.innerText = txt;
+                    }
+                }
+            } catch (e) {
+                output.innerText = `Fetch Error: ${e.message}\n(Did you enable the CORS extension?)`;
+            }
+        }
+    </script>
+</body>
+</html>
